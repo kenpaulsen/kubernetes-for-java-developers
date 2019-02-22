@@ -1,10 +1,10 @@
 greeting:
-  image: arungupta/greeting
+  image: my/greeting
   replicaCount: 1
 
 image:
+  imagePullPolicy: IfNotPresent
   tag: latest
-  pullPolicy: IfNotPresent
 
 service:
   type: LoadBalancer

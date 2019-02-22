@@ -3,13 +3,59 @@
 
 Deploying your Java application in a Kubernetes cluster could feel like Alice in Wonderland. You keep going down the rabbit hole and don't know how to make that ride comfortable. This repository explains how a Java application can be deployed, tested, debugged and monitored in Kubernetes. In addition, it also talks about canary deployment and deployment pipeline.
 
+== Docker CLI Cheatsheet
+
+.Docker Cheatsheet
+|===
+| *Command* | *Description*
+| `docker system prune -a --volumes -f`
+| Clean up all unused Docker resources
+| `docker images`
+| List Docker images
+| `docker image build -t <tag> .`
+| Use default `Dockerfile` in current directory to build an image with tag `<tag>`
+| `docker image rm <image name or id>`
+| Remove docker image
+| `docker container list`
+| List Docker containers
+| `docker ps -a`
+| List all Docker containers (even if stopped)
+| `docker container list -a`
+| List all Docker containers (even if stopped)
+| `docker logs <container id>`
+| Show logs for a container (`-f` to be like "tail -f")
+| `docker container run --name greeting -p 8080:8080 -d <tag>`
+| Run Docker container named `greeting` and map port `8080`, run detatched (in background), use image with `<tag>`
+| `docker exec -it <container id> bash`
+| Connect to a running docker container
+| `docker container stop <container id>`
+| Stops Docker container `<container id>`
+| `docker container rm -f greeting`
+| Remove Docker container named "greeting"
+|===
+
+== Kubernetes CLI Cheatsheet
+
+.Docker Cheatsheet
+|===
+| *Command* | *Description*
+| `kubectl get pods`
+| List kubernetes pods
+| `kubectl describe pod <pod name>`
+| List kubernetes pods
+| `helm ls --all myapp`
+| List kubernetes apps named `myapp`
+| `helm del --purge myapp`
+| List kubernetes apps named `myapp`
+|===
+
 == Application
 
-We will use a simple Java application built using Spring Boot. The application publishes a REST endpoint that can be invoked at `http://{host}:{port}/hello`.
+We will use a simple Java application built using Spring Boot. The application publishes a REST endpoint that can be invoked at `http://localhost:8080/hello`.
 
 The source code is in the `app` directory.
 
-== Build and Test using Maven
+== Exercise #1: Build and Test using Maven
 
 . Run application:
 
@@ -20,26 +66,34 @@ The source code is in the `app` directory.
 
 	curl http://localhost:8080/hello
 
-== Build and Test using Docker
+If the response was `Hello`, it worked!
 
-=== Build Docker Image using multi-stage Dockerfile
+== Exercise #2: Build and Test using Docker
+
+=== 2.1(A) Build Docker Image using multi-stage Dockerfile
 
 . Create `m2.tar.gz`:
 
 	mvn -Dmaven.repo.local=./m2 clean package
 	tar czvf m2.tar.gz ./m2
 
-. Create Docker image:
-
-	docker image build -t arungupta/greeting .
-+
-Explain multi-stage Dockerfile.
-
-=== Build Docker Image using https://github.com/GoogleContainerTools/jib[Jib]
+. Take a look at `Dockerfile`. Note the reference to `m2.tar.gz`. Also note the 2 `FROM` lines, this creates a multi-stage `Dockerfile`. Builds can stop at a specific target. You can copy files from prior stages, or other images. Visit https://docs.docker.com/develop/develop-images/multistage-build/[multi-stage Dockerfiles] to read more.
 
 . Create Docker image:
 
-    mvn compile jib:build -Pjib
+	docker image build -t my/greeting .
+
+Confirm that your image was created (hint: use `Docker Cheatsheet` above).
+
+=== 2.1(B) Build Docker Image using https://github.com/GoogleContainerTools/jib[Jib]
+
+*NOTE from Ken*: I have not explored `jib` yet.  The 1st option below requires modifications to the pom.xml to setup your github account.  The 2nd option builds and runs fine, but it showed the date in the image list as created 49 years ago.
+
+. Create Docker image:
+
+	mvn compile jib:build -Pjib
+
+Confirm that your image was created (hint: use `Docker Cheatsheet` above).
 
 The benefits of using Jib over a multi-stage Dockerfile build include:
 
@@ -50,13 +104,15 @@ The benefits of using Jib over a multi-stage Dockerfile build include:
 
 The above builds directly to your Docker registry. Alternatively, Jib can also build to a Docker daemon:
 
-    mvn compile jib:dockerBuild -Pjib
+	mvn compile jib:dockerBuild -Pjib
 
-=== Test built container using Docker
+Confirm that your image was created (hint: use `Docker Cheatsheet` above).
+
+=== 2.2 Test built container using Docker
 
 . Run container:
 
-	docker container run --name greeting -p 8080:8080 -d arungupta/greeting
+	docker container run --name greeting -p 8080:8080 -d my/greeting
 
 . Access application:
 
@@ -64,56 +120,83 @@ The above builds directly to your Docker registry. Alternatively, Jib can also b
 
 . Remove container:
 
+	docker container stop greeting
+	docker container rm greeting
+		or
 	docker container rm -f greeting
 
-== Minimal Docker Image using Custom JRE
+== Exercise #3: Minimal Docker Image using Custom JRE
 
-. Download http://download.oracle.com/otn-pub/java/jdk/11.0.1+13/90cf5d8f270a4347a95050320eef3fb7/jdk-11.0.1_linux-x64_bin.rpm[JDK 11] and `scp` to an https://aws.amazon.com/marketplace/pp/B00635Y2IW/ref=mkt_ste_ec2_lw_os_win[Amazon Linux] instance
-. Install JDK 11:
+. Download and install https://www.oracle.com/technetwork/java/javase/downloads/jdk11-downloads-5066655.html[JDK 11]
 
-	sudo yum install jdk-11.0.1_linux-x64_bin.rpm
+	To deploy on link with a custom JDK, you will need to download the link JDK too.
+
+. You may need to set your JAVA_HOME variable to use Java 11 (type `java -version` to check), on mac:
+
+* [ba]sh:
+
+	export JAVA_HOME=$(/usr/libexec/java_home -v 11)
+
+* [t]csh:
+
+	setenv JAVA_HOME `/usr/libexec/java_home -v !*`
+
+. On mac you may need to creaet a symbolic link to the jlink executable (type `jlink --version` to check):
+
+	sudo ln -s /Library/Java/JavaVirtualMachines/jdk-11.0.1.jdk/Contents/Home/bin/jlink /usr/local/bin/jlink
 
 . Create a custom JRE for the Spring Boot application:
 
+* [ba]sh:
+
 	cp target/app.war target/app.jar
-	jlink \
-		--output myjre \
-		--add-modules $(jdeps --print-module-deps target/app.jar),\
-		java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,\
-		java.management,java.security.jgss,java.instrument
+	# Replace <your-linux-jmods> with a path like /.../jdk-11.0.2/jmods
+	jlink --module-path <your-linux-jmods> --output myjre --add-modules $(jdeps --print-module-deps target/app.jar),java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
+
+* [t]csh:
+
+	cp target/app.war target/app.jar
+	jlink --module-path <your-linux-jmods> --output myjre --add-modules `jdeps --print-module-deps target/app.jar`,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
 
 . Build Docker image using this custom JRE:
 
-	docker image build --file Dockerfile.jre -t arungupta/greeting:jre-slim .
+	docker image build --file Dockerfile.jre -t my/greeting:jre-slim .
 
 . List the Docker images and show the difference in sizes:
 
-	[ec2-user@ip-172-31-21-7 app]$ docker image ls | grep greeting
-	arungupta/greeting   jre-slim            9eed25582f36        6 seconds ago       162MB
-	arungupta/greeting   latest              1b7c061dad60        10 hours ago        490MB
+	> docker image ls | grep greeting
+	my/greeting   jre-slim            4c8d8b7bb02e	      6 seconds ago       161MB
+	my/greeting   latest              a31c68d0332a        24 minutes ago      489MB
 
 . Run the container:
 
-	docker container run -d -p 8080:8080 arungupta/greeting:jre-slim
+	docker container run -d -p 8080:8080 my/greeting:jre-slim
 
 . Access the application:
 
 	curl http://localhost:8080/hello
 
-== Build and Test using Kubernetes
+. If it doesn't work:
+
+	docker container list
+	docker logs <container id>
+
+== Exercise #4: Build and Test using Kubernetes
 
 Kubernetes can be easily enabled on a development machine using Docker for Mac as explained at https://docs.docker.com/docker-for-mac/#kubernetes.
 
 . Ensure that Kubernetes is enabled in Docker for Mac
 . Show the list of contexts:
 
-    kubectl config get-contexts
+	kubectl config get-contexts
+
+	Note: Might need `brew install kubernetes-cli`, although I think it comes with docker too.
 
 . Configure kubectl CLI for Kubernetes cluster
 
 	kubectl config use-context docker-for-desktop
 
-. Install the Helm CLI:
+. Install the https://github.com/helm/helm[Helm] CLI:
 +
 	brew install kubernetes-helm
 +
@@ -146,10 +229,10 @@ If Helm has already been initialized on the cluster, then you may have to upgrad
 
 . Access the application:
 
-  	curl http://$(kubectl get svc/myapp-greeting \
-  		-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):8080/hello
+	curl http://$(kubectl get svc/myapp-greeting \
+		-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):80/hello
 
-== Debug Docker and Kubernetes using IntelliJ
+== Exercise #5: Debug Docker and Kubernetes using IntelliJ
 
 You can debug a Docker container and a Kubernetes Pod if they're running locally on your machine.
 
@@ -160,10 +243,9 @@ This was tested using Docker for Mac/Kubernetes. Use the previously deployed Hel
 . Show service:
 +
 	kubectl get svc
-	NAME               TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
-	greeting-service   LoadBalancer   10.101.39.100    <pending>     80:30854/TCP                    8m
-	kubernetes         ClusterIP      10.96.0.1        <none>        443/TCP                         90d
-	myapp-greeting     LoadBalancer   10.108.104.178   localhost     8080:32189/TCP,5005:31117/TCP   4s
+	NAME             TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)                       AGE
+	kubernetes       ClusterIP      10.96.0.1       <none>        443/TCP                       41m
+	myapp-greeting   LoadBalancer   10.100.153.94   localhost     80:30547/TCP,5005:32003/TCP   7s
 +
 Highlight the debug port is also forwarded.
 +
@@ -178,7 +260,7 @@ image::images/docker-debug2.png[]
 . Access the application:
 
 	curl http://$(kubectl get svc/myapp-greeting \
-		-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):8080/hello
+		-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):80/hello
 
 . Show the breakpoint hit in IntelliJ:
 +
@@ -194,17 +276,18 @@ This was tested using Docker for Mac.
 
 . Run container:
 
-	docker container run --name greeting -p 8080:8080 -p 5005:5005 -d arungupta/greeting
+	docker container run --name greeting -p 8080:8080 -p 5005:5005 -d my/greeting
 
 . Check container:
 
 	$ docker container ls -a
 	CONTAINER ID        IMAGE                COMMAND                  CREATED             STATUS              PORTS                                            NAMES
-	724313157e3c        arungupta/greeting   "java -jar app-swarm…"   3 seconds ago       Up 2 seconds        0.0.0.0:5005->5005/tcp, 0.0.0.0:8080->8080/tcp   greeting
+	724313157e3c        my/greeting   "java -jar app-swarm…"   3 seconds ago       Up 2 seconds        0.0.0.0:5005->5005/tcp, 0.0.0.0:8080->8080/tcp   greeting
 
 . Setup breakpoint as explained above.
 . Access the application using `curl http://localhost:8080/resources/greeting`.
 
+////
 == Kubernetes Cluster on AWS
 
 This application will be deployed to an https://aws.amazon.com/eks/[Amazon EKS cluster]. Let's create the cluster first.
@@ -263,7 +346,7 @@ As indicated by `*`, kubectl CLI configuration is updated to the recently create
 
 . Explicitly set the context:
 
-    kubectl config use-context arun@myeks.us-west-2.eksctl.io
+	kubectl config use-context arun@myeks.us-west-2.eksctl.io
 
 . Install Helm:
 
@@ -307,8 +390,9 @@ It shows the port `8080` and `5005` are published and an Elastic Load Balancer i
 . Delete the application:
 
 	helm delete --purge myapp
+////
 
-== Istio
+== Optional Exercise #1: Istio
 
 https://istio.io/[Istio] is is a layer 4/7 proxy that routes and load balances traffic over HTTP, WebSocket, HTTP/2, gRPC and supports application protocols such as MongoDB and Redis. Istio uses the Envoy proxy to manage all inbound/outbound traffic in the service mesh.
 
@@ -374,15 +458,14 @@ Check that both Tracing and Grafana add-ons are enabled.
 
 . Get response:
 
-  curl http://$(kubectl get svc/greeting \
-  	-o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+	curl http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
 
 === Traffic Shifting
 
 . Deploy application with two versions of `greeting`, one that returns `Hello` and another that returns `Howdy`:
 
-  kubectl delete -f manifests/app.yaml
-  kubectl apply -f manifests/app-hello-howdy.yaml
+	kubectl delete -f manifests/app.yaml
+	kubectl apply -f manifests/app-hello-howdy.yaml
 
 . Check the list of pods:
 
@@ -393,11 +476,11 @@ Check that both Tracing and Grafana add-ons are enabled.
 
 . Access application multipe times to see different response:
 
-  for i in {1..10}
-  do
-  	curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
-  	echo
-  done
+	for i in {1..10}
+	do
+		curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+		echo
+	done
   
 . Setup an Istio rule to split traffic between 75% to `Hello` and 25% to `Howdy` version of the `greeting` service:
 
@@ -473,12 +556,12 @@ Delays and timeouts can be injected in services.
 
 . Deploy the application:
 
-   kubectl delete -f manifests/app.yaml
-   kubectl apply -f manifests/app-ingress.yaml
+	kubectl delete -f manifests/app.yaml
+	kubectl apply -f manifests/app-ingress.yaml
 
 . Add a 5 seconds delay to calls to the service:
 
-    kubectl apply -f manifests/greeting-delay.yaml
+	kubectl apply -f manifests/greeting-delay.yaml
 
 . Invoke the service using a 2 seconds timeout:
 
@@ -489,7 +572,7 @@ Delays and timeouts can be injected in services.
 
 The service will timeout in 2 seconds.
 
-== Chaos using kube-monkey
+== Optional Exercise #2: Chaos using kube-monkey
 
 https://github.com/asobti/kube-monkey[kube-monkey] is an implementation of Netflix's Chaos Monkey for Kubernetes clusters. It randomly deletes Kubernetes pods in the cluster encouraging and validating the development of failure-resilient services.
 
@@ -507,7 +590,7 @@ https://github.com/asobti/kube-monkey[kube-monkey] is an implementation of Netfl
 
 This application agrees to kill up to 40% of pods. The schedule of deletion is defined by kube-monkey configuration and is defined to be between 10am and 4pm on weekdays.
 
-== Deployment Pipeline
+== Optional Exercise #3: Deployment Pipeline
 
 https://github.com/GoogleContainerTools/skaffold[Skaffold] is a command line utility that facilitates continuous development for Kubernetes applications. With Skaffold, you can iterate on your application source code locally then deploy it to a remote Kubernetes cluster.
 
@@ -531,8 +614,8 @@ https://github.com/GoogleContainerTools/skaffold[Skaffold] is a command line uti
 . Open http://localhost:8080/resources/greeting in browser. This will show the page is not available.
 . Run Skaffold in the application directory:
 
-    cd app
-    skaffold dev
+	cd app
+	skaffold dev
 
 . Refresh the page in browser to see the output.
 
