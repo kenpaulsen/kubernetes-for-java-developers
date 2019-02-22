@@ -27,7 +27,7 @@ The source code is in the `app` directory.
 . Create `m2.tar.gz`:
 
 	mvn -Dmaven.repo.local=./m2 clean package
-	tar cvf m2.tar.gz ./m2
+	tar czvf m2.tar.gz ./m2
 
 . Create Docker image:
 
