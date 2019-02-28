@@ -151,12 +151,12 @@ Confirm that your image was created (hint: use `Docker Cheatsheet` above).
 
 	cp target/app.war target/app.jar
 	# Replace <your-linux-jmods> with a path like /.../jdk-11.0.2/jmods
-	jlink --module-path <your-linux-jmods> --output myjre --add-modules $(jdeps --print-module-deps target/app.jar),java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
+	jlink --module-path <your-linux-jmods> --output myjre --add-modules $(jdeps --print-module-deps target/app.jar),jdk.jdwp.agent,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
 
 * [t]csh:
 
 	cp target/app.war target/app.jar
-	jlink --module-path <your-linux-jmods> --output myjre --add-modules `jdeps --print-module-deps target/app.jar`,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
+	jlink --module-path <your-linux-jmods> --output myjre --add-modules `jdeps --print-module-deps target/app.jar`,jdk.jdwp.agent,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
 
 . Build Docker image using this custom JRE:
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: greeting
-        image: arungupta/greeting
+        image: my/greeting
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
