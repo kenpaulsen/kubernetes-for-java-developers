@@ -26,6 +26,8 @@ Deploying your Java application in a Kubernetes cluster could feel like Alice in
 | Show logs for a container (`-f` to be like "tail -f")
 | `docker container run --name greeting -p 8080:8080 -d <tag>`
 | Run Docker container named `greeting` and map port `8080`, run detatched (in background), use image with `<tag>`
+| `docker run -it <image id> bash`
+| Run a docker image with "bash"
 | `docker exec -it <container id> bash`
 | Connect to a running docker container
 | `docker container stop <container id>`
@@ -129,7 +131,7 @@ Confirm that your image was created (hint: use `Docker Cheatsheet` above).
 
 . Download and install https://www.oracle.com/technetwork/java/javase/downloads/jdk11-downloads-5066655.html[JDK 11]
 
-	To deploy on link with a custom JDK, you will need to download the link JDK too.
+	To deploy on link with a custom JDK, you will need to download and unzip the linuk JDK too (for it's `<linux-jmods>` folder).
 
 . You may need to set your JAVA_HOME variable to use Java 11 (type `java -version` to check), on mac:
 
@@ -150,13 +152,13 @@ Confirm that your image was created (hint: use `Docker Cheatsheet` above).
 * [ba]sh:
 
 	cp target/app.war target/app.jar
-	# Replace <your-linux-jmods> with a path like /.../jdk-11.0.2/jmods
-	jlink --module-path <your-linux-jmods> --output myjre --add-modules $(jdeps --print-module-deps target/app.jar),jdk.jdwp.agent,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
+	# Replace <linux-jmods> with a path like /.../jdk-11.0.2/jmods
+	jlink --module-path <linux-jmods> --output myjre --add-modules $(jdeps --print-module-deps target/app.jar),jdk.jdwp.agent,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
 
 * [t]csh:
 
 	cp target/app.war target/app.jar
-	jlink --module-path <your-linux-jmods> --output myjre --add-modules `jdeps --print-module-deps target/app.jar`,jdk.jdwp.agent,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
+	jlink --module-path <linux-jmods> --output myjre --add-modules `jdeps --print-module-deps target/app.jar`,jdk.jdwp.agent,java.xml,jdk.unsupported,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument
 
 . Build Docker image using this custom JRE:
 
