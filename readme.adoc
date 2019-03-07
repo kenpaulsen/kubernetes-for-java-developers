@@ -420,6 +420,8 @@ More details at https://aws.amazon.com/blogs/opensource/getting-started-istio-ek
 		--set tracing.enabled=true \
 		--set grafana.enabled=true
 
+_Note: with docker on mac, you might need to increase your memory allocation (3GB for me) otherwise all pods might not start up correctly_
+
 . Verify:
 +
 	kubectl get pods -n istio-system
@@ -443,6 +445,16 @@ Check that both Tracing and Grafana add-ons are enabled.
 
 	kubectl label namespace default istio-injection=enabled
 
+. From the repo's main directory, create an istio gateway:
+
+    kubectl apply -f manifests/app-gateway.yaml
+
+. Get the list of gateways:
+
+    kubectl get gateways
+    NAME               CREATED AT
+    greeting-gateway   1h
+
 . From the repo's main directory, deploy the application:
 
 	kubectl apply -f manifests/app.yaml
@@ -455,14 +467,32 @@ Check that both Tracing and Grafana add-ons are enabled.
 
 . Get list of containers in the pod:
 
-	kubectl get pods -l app=greeting -o jsonpath={.items[*].spec.containers[*].name}
+	kubectl get pods -l app=greeting -o jsonpath='{.items[*].spec.containers[*].name}'
 	greeting istio-proxy
 
-. Get response:
+. From the repo's main directory, create an istio virtual service:
 
-	curl http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+    kubectl apply -f manifests/app-virtual-service.yaml
+
+. Get the list of virtual services:
+
+    kubectl get virtualservices
+    NAME                       CREATED AT
+    greeting-virtual-service   1h
+
+. Get response via istio:
+
+	curl http://$(kubectl get service istio-ingressgateway --namespace istio-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
 
 === Traffic Shifting
+
+. Tag your current app with 'hello':
+
+    docker tag my/greeting:jre-slim my/greeting:hello
+
+. Rebuild your application, changing the value in GreetingController.java#sayHello to return "Howdy" instead of "Hello". (Don't change the @RequestMapping value: /hello) and tag it "howdy"
+
+    docker image build --file Dockerfile.jre -t my/greeting:howdy .
 
 . Deploy application with two versions of `greeting`, one that returns `Hello` and another that returns `Howdy`:
 
@@ -476,11 +506,11 @@ Check that both Tracing and Grafana add-ons are enabled.
 	greeting-hello-69cc7684d-7g4bx    2/2       Running   0          1m
 	greeting-howdy-788b5d4b44-g7pml   2/2       Running   0          1m
 
-. Access application multipe times to see different response:
+. Access application multiple times to see different response (via default kubernetes service load balancing):
 
 	for i in {1..10}
 	do
-		curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+		curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):8080/hello
 		echo
 	done
   
@@ -488,7 +518,13 @@ Check that both Tracing and Grafana add-ons are enabled.
 
   kubectl apply -f manifests/app-rule-75-25.yaml
 
-. Invoke the service again to see the traffic split between two services.
+. Invoke the service via istio to see the traffic split between two services. _Note: if you use the above commands, your traffic will still be load balanced by kubernetes default behavior_
+
+	for i in {1..10}
+	do
+		curl -q http://$(kubectl get service istio-ingressgateway --namespace istio-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+		echo
+	done
 
 === Canary Deployment
 
@@ -497,13 +533,13 @@ Check that both Tracing and Grafana add-ons are enabled.
   kubectl delete -f manifests/app-rule-75-25.yaml
   kubectl apply -f manifests/app-canary.yaml
 
-. Access application multipe times to see ~10% greeting messages with `Howdy`:
+. Access application multiple times to see ~10% greeting messages with `Howdy`:
 
-  for i in {1..50}
-  do
-  	curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
-  	echo
-  done
+	for i in {1..50}
+	do
+		curl -q http://$(kubectl get service istio-ingressgateway --namespace istio-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+		echo
+	done
 
 === Distributed Tracing
 

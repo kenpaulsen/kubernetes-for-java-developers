@@ -4,7 +4,9 @@ metadata:
   name: greeting-virtual-service
 spec:
   hosts:
-    - greeting
+    - "*"
+  gateways:
+    - greeting-gateway
   http:
   - route:
     - destination:
