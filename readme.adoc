@@ -510,7 +510,7 @@ Check that both Tracing and Grafana add-ons are enabled.
 
 	for i in {1..10}
 	do
-		curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')/hello
+		curl -q http://$(kubectl get svc/greeting -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'):8080/hello
 		echo
 	done
   
